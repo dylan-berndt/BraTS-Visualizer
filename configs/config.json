@@ -1,0 +1,5 @@
+{
+    "train": true,
+    "trainingSet": "slices",
+    "cache": "F:/.cache/kagglehub/datasets/awsaf49/brats2020-training-data"
+}
