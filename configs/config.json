@@ -1,5 +1,6 @@
 {
     "train": true,
     "trainingSet": "slices",
+    "patchesPerVolume": 4,
     "cache": "F:/.cache/kagglehub/datasets/awsaf49/brats2020-training-data"
 }

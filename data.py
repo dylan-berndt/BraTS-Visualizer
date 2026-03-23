@@ -10,6 +10,7 @@ import pandas as pd
 import os
 from glob import glob
 from config import *
+import random
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -49,6 +50,7 @@ class BraTSData(Dataset):
 
         metadata = pd.read_csv(glob(os.path.join(self.path, "*Metadata.csv"), recursive=True)[0])
         self.metadata = metadata
+        self.volumeNames = self.metadata.volume.unique()
 
     def loadSlice(self, path):
         with h5py.File(path, 'r') as f:
@@ -57,21 +59,19 @@ class BraTSData(Dataset):
     
         # Convert from one hot encoding to categorical labels
         if mask.ndim == 3:
-            newMask = np.zeros((mask.shape[0], mask.shape[1]), dtype=np.int64)
-            newMask[mask[:,:,0] == 1] = 1 
-            newMask[mask[:,:,1] == 1] = 2
-            newMask[mask[:,:,2] == 1] = 3
+            target = np.zeros((mask.shape[0], mask.shape[1]), dtype=np.int64)
+            target[mask[:,:,0] == 1] = 1 
+            target[mask[:,:,1] == 1] = 2
+            target[mask[:,:,2] == 1] = 3
         else:
             # Map from (0, 1, 2, 4) to (0, 1, 2, 3)
-            newMask = np.zeros(mask.shape, dtype=np.int64)
-            newMask[mask == 1] = 1
-            newMask[mask == 2] = 2
-            newMask[mask == 4] = 3
+            target = np.copy(mask).astype(np.int64)
+            target[mask == 4] = 3
         
         image = np.transpose(image, (2, 0, 1))
         
         image = torch.from_numpy(image).float()
-        mask = torch.from_numpy(newMask).long()
+        mask = torch.from_numpy(target).long()
 
         return image, mask
 
@@ -94,17 +94,46 @@ class BraTSData(Dataset):
         images, masks = zip(*[item[1] for item in compiled])
 
         return torch.stack(images), torch.stack(masks)
+    
+    def volumeCrop(self, image, mask, patchSize=128, bias=0.67):
+        ph, pw, pd = patchSize, patchSize, patchSize
+        h, w, d = mask.shape
+
+        if random.random() < bias:
+            # Pick a random foreground voxel as the center
+            foregroundVoxels = torch.nonzero(mask > 0)  # (N, 3)
+            if len(foregroundVoxels) > 0:
+                center = foregroundVoxels[random.randint(0, len(foregroundVoxels) - 1)]
+                x = center[0].item() - ph // 2
+                y = center[1].item() - pw // 2
+                z = center[2].item() - pd // 2
+            else:
+                bias = 0  # fall through to random
+        
+        else:  # pure background sample
+            x = random.randint(0, h - ph)
+            y = random.randint(0, w - pw)
+            z = random.randint(0, d - pd)
+
+        # Clamp so the patch stays inside the volume
+        x = max(0, min(x, h - ph))
+        y = max(0, min(y, w - pw))
+        z = max(0, min(z, d - pd))
+
+        return image[:, x:x+ph, y:y+pw, z:z+pd], mask[x:x+ph, y:y+pw, z:z+pd]
 
     def __len__(self):
         if self.config.trainingSet == "volumetric":
-            raise NotImplementedError("Volumetric loading not implemented yet")
+            return len(self.volumeNames) * self.config.patchesPerVolume
 
         elif self.config.trainingSet == "slices":
             return len(self.indices)
     
     def __getitem__(self, key):
         if self.config.trainingSet == "volumetric":
-            raise NotImplementedError("Volumetric loading not implemented yet")
+            volumeIdx = key % len(self.volumeNames)
+            image, mask = self.loadVolume(self.volumeNames[volumeIdx])
+            return self.volumeCrop(image, mask)
 
         elif self.config.trainingSet == "slices":
             image, mask = self.loadSlice(self.validPaths[key])
