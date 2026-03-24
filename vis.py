@@ -14,38 +14,63 @@ dataset = BraTSData(config)
 server = get_server()
 state, ctrl = server.state, server.controller
 
-# TODO: Add MRI slice selection as well as tumor slice selection
 state.volumeName = str(dataset.volumeNames[0])
 state.volumeOptions = [{"title": str(n), "value": str(n)} for n in dataset.volumeNames]
 
+# TODO: Actual names of slices
+state.sliceOption = str(0)
+state.sliceOptions = [{"title": str(n), "value": str(n)} for n in range(4)]
+
+pv.set_plot_theme('dark')
 pl = pv.Plotter()
 
 
-def loadVolume(volume_name):
+def loadVolume(volumeName, sliceOption):
     pl.clear()
-    mriVolume, tumorVolume = dataset.loadVolume(volume_name)
-    mriVolume = mriVolume[:, 0].numpy()
+    mriVolume, tumorVolume = dataset.loadVolume(volumeName)
+    mriVolume = mriVolume[:, int(sliceOption)].numpy()
     tumorVolume = tumorVolume.numpy()
+
+    mriVolume = np.transpose(mriVolume, (1, 0, 2))
+    tumorVolume = np.transpose(tumorVolume, (1, 0, 2))
 
     grid = pv.ImageData(dimensions=mriVolume.shape)
     grid.point_data["MRI"] = mriVolume.flatten(order="F")
-    pl.add_volume(grid, cmap="hot")
+    pl.add_volume(grid, cmap="bone_r")
 
-    # tumor_grid = pv.ImageData(dimensions=tumorVolume.shape)
-    # tumor_grid.point_data["mask"] = tumorVolume.flatten(order="F")
-    # pl.add_volume(tumor_grid, cmap="hot", opacity="linear", clim=[0.5, 1.0])
+    tumorGrid = pv.ImageData(dimensions=tumorVolume.shape)
+    tumorGrid.point_data["tumor"] = tumorVolume.flatten(order="F")
+
+    tumorLabels = ["Necrotic/Non-enhancing Tumor", "Peritumoral Edema", "GD-enhancing Tumor"]
+    tumorColors = ["red", "blue", "orange"]
+
+    legend = []
+
+    for i in range(3):
+        region = tumorGrid.threshold((i + 1, i + 1))
+
+        if region.n_points > 0:
+            pl.add_mesh(region, color=tumorColors[i], opacity=0.6)
+            legend.append([tumorLabels[i], tumorColors[i]])
+
+    pl.add_legend(
+        legend,
+        bcolor="black",
+        border=True,
+        size=(0.25, 0.25)
+    )
 
     pl.reset_camera()
     ctrl.view_update()  # tells Trame to push the new render to the browser
 
 
 # Trame state change listener — fires whenever state.volume_name changes
-@state.change("volumeName")
-def on_volume_change(volumeName, **kwargs):
-    loadVolume(volumeName)
+@state.change("volumeName", "slice")
+def onVolumeChange(volumeName, sliceOption, **kwargs):
+    loadVolume(volumeName, sliceOption)
 
 
-with SinglePageLayout(server) as layout:
+with SinglePageLayout(server, dark=True) as layout:
     layout.title.set_text("MRI Viewer")
 
     with layout.toolbar:
@@ -58,9 +83,17 @@ with SinglePageLayout(server) as layout:
             style="max-width: 300px;",
         )
 
+        v3.VSelect(
+            label="MRI Slice",
+            v_model=("sliceOption",),
+            items=("sliceOptions",),
+            density="compact",
+            hide_details=True,
+            style="max-width: 300px;",
+        )
+
     with layout.content:
-        with plotter_ui(pl):
-            view = plotter_ui(pl)
+        with plotter_ui(pl) as view:
             ctrl.view_update = view.update
             ctrl.view_reset_camera = view.reset_camera
             
