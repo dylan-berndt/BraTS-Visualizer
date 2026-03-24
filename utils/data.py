@@ -9,7 +9,7 @@ import pandas as pd
 
 import os
 from glob import glob
-from config import *
+from .config import *
 import random
 
 from concurrent.futures import ThreadPoolExecutor
@@ -28,7 +28,10 @@ class BraTSData(Dataset):
         if config.train:
             # if "cache" in config:
             #     os.environ['KAGGLEHUB_CACHE_DIR'] = config.cache
-            self.path = kagglehub.dataset_download("awsaf49/brats2020-training-data", output_dir=config.cache)
+            if "cache" in config:
+                self.path = kagglehub.dataset_download("awsaf49/brats2020-training-data", output_dir=config.cache)
+            else:
+                self.path = kagglehub.dataset_download("awsaf49/brats2020-training-data")
         else:
             self.path = config.path
 
