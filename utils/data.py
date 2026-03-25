@@ -133,6 +133,7 @@ class BraTSData(Dataset):
             return len(self.indices)
     
     def __getitem__(self, key):
+        # TODO: Return other statistics about volumes/slices (age, ttd)
         if self.config.trainingSet == "volumetric":
             volumeIdx = key % len(self.volumeNames)
             image, mask = self.loadVolume(self.volumeNames[volumeIdx])

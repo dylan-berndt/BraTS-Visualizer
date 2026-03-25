@@ -1,0 +1,9 @@
+{
+    "train": true,
+    "trainingSet": "slices",
+    "patchesPerVolume": 4,
+    "imageSize": 256,
+    "labels": 4,
+    "encoder": "GoodBaiBai88/M3D-CLIP",
+    "outputs": "regressional"
+}

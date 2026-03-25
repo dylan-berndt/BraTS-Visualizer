@@ -28,11 +28,12 @@ pl = pv.Plotter()
 def loadVolume(volumeName, sliceOption):
     pl.clear()
     mriVolume, tumorVolume = dataset.loadVolume(volumeName)
+    print(mriVolume.shape)
     mriVolume = mriVolume[:, int(sliceOption)].numpy()
     tumorVolume = tumorVolume.numpy()
-
-    mriVolume = np.transpose(mriVolume, (1, 0, 2))
-    tumorVolume = np.transpose(tumorVolume, (1, 0, 2))
+    
+    mriVolume = np.transpose(mriVolume, (1, 2, 0))
+    tumorVolume = np.transpose(tumorVolume, (1, 2, 0))
 
     grid = pv.ImageData(dimensions=mriVolume.shape)
     grid.point_data["MRI"] = mriVolume.flatten(order="F")
