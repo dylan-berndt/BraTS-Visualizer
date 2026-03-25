@@ -18,6 +18,7 @@ class BraTSM3D(nn.Module):
         self.numPatches = (config.imageSize * config.imageSize * 32) // (16 * 16 * 4)
 
         if config.outputs == "segmentation":
+            self.transpose = nn.LazyConvTranspose3d(32, kernel_size=(4, 16, 16), stride=(4, 16, 16))
             self.decoder = nn.LazyConv3d(config.labels, 3, 1, padding="same")
         elif config.outputs == "regressional":
             self.decoder = nn.LazyLinear(1)
@@ -37,8 +38,14 @@ class BraTSM3D(nn.Module):
         x = self.encoder.mm_vision_proj(x)
 
         if self.config.outputs == "segmentation":
-            # TODO: Reshaping of tokens
-            pass
+            B, N, C = x.shape
+            # Remove cls token
+            x = x[:, 1:]
+            x = x.view(B, 8, 16, 16, C)
+            x = x.permute(0, 4, 1, 2, 3)
+            x = self.transpose(x)
+            x = self.decoder(x.unsqueeze(1))
+
         elif self.config.outputs == "regressional":
             x = self.decoder(x[:, 0])
 
