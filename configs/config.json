@@ -1,9 +1,11 @@
 {
     "train": true,
-    "trainingSet": "slices",
-    "patchesPerVolume": 4,
+    "trainingSet": "volumetric",
     "imageSize": 256,
     "labels": 4,
+    "targets": 155,
     "encoder": "GoodBaiBai88/M3D-CLIP",
-    "outputs": "regressional"
+    "trainEncoder": false,
+    "outputs": "categorical",
+    "cache": "F:/.cache/kagglehub/datasets/awsaf49/brats2020-training-data"
 }

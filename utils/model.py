@@ -14,7 +14,10 @@ class BraTSM3D(nn.Module):
         # Effectively nn.Linear but idc
         self.modalityProjection = nn.Conv3d(4, 1, 1)
 
-        self.encoder = AutoModel.from_pretrained(config.encoder, trust_remote_code=True)
+        print("DEFAULT DEVICE:", torch.get_default_device())
+
+        self.encoder = AutoModel.from_pretrained(config.encoder, trust_remote_code=True, device_map=None, low_cpu_mem_usage=False)
+        self.encoder.requires_grad_(config.trainEncoder)
         self.numPatches = (config.imageSize * config.imageSize * 32) // (16 * 16 * 4)
 
         if config.outputs == "segmentation":
@@ -22,16 +25,21 @@ class BraTSM3D(nn.Module):
             self.decoder = nn.LazyConv3d(config.labels, 3, 1, padding="same")
         elif config.outputs == "regressional":
             self.decoder = nn.LazyLinear(1)
+        elif config.outputs == "categorical":
+            self.decoder = nn.LazyLinear(config.targets)
 
     def preprocess(self, volume):
         # TODO: Determine whether this projection is reasonable, consider sum-to-one to keep "imageness"
-        x = self.modalityProjection(volume)
+        x = volume.permute(0, 2, 1, 3, 4)
+        x = self.modalityProjection(x)
         x = nn.functional.interpolate(x, size=(32, 256, 256), mode="trilinear", align_corners=False)
-        # TODO: Normalize x
+        # TODO: Check normalization
+        x = x - x.amin(dim=-1, keepdim=True)
+        x = x / (x.amax(dim=-1, keepdim=True)[0] + 1e-5)
         return x
 
-    def forward(self, volume):
-        x = self.preprocess(volume)
+    def forward(self, inputs):
+        x = self.preprocess(inputs["image"])
 
         # Don't use the encode_image function to prevent normalization
         x, _ = self.encoder.vision_encoder(x)
@@ -47,6 +55,9 @@ class BraTSM3D(nn.Module):
             x = self.decoder(x.unsqueeze(1))
 
         elif self.config.outputs == "regressional":
+            x = self.decoder(x[:, 0])
+
+        elif self.config.outputs == "categorical":
             x = self.decoder(x[:, 0])
 
         return x

@@ -26,8 +26,6 @@ class BraTSData(Dataset):
     def __init__(self, config: Config):
         self.config = config
         if config.train:
-            # if "cache" in config:
-            #     os.environ['KAGGLEHUB_CACHE_DIR'] = config.cache
             if "cache" in config:
                 self.path = kagglehub.dataset_download("awsaf49/brats2020-training-data", output_dir=config.cache)
             else:
@@ -54,6 +52,12 @@ class BraTSData(Dataset):
         metadata = pd.read_csv(glob(os.path.join(self.path, "*Metadata.csv"), recursive=True)[0])
         self.metadata = metadata
         self.volumeNames = self.metadata.volume.unique()
+
+        pd.set_option('display.max_rows', None) # Set to None to display all rows
+        # Optional: also display all columns
+        pd.set_option('display.max_columns', None)
+
+        # print(self.metadata.value_counts(["volume"]))
 
     def loadSlice(self, path):
         with h5py.File(path, 'r') as f:
@@ -82,7 +86,7 @@ class BraTSData(Dataset):
         images = []
         masks = []
         indices = []
-        for i, file in enumerate(glob(os.path.join(self.path, "**", f"*volume_{name}*.h5"), recursive=True)):
+        for i, file in enumerate(glob(os.path.join(self.path, "**", f"*volume_{name}_slice_*.h5"), recursive=True)):
             data = self.loadSlice(file)
             if data is not None:
                 image, mask = data
@@ -98,7 +102,7 @@ class BraTSData(Dataset):
 
         return torch.stack(images), torch.stack(masks)
     
-    def volumeCrop(self, image, mask, patchSize=128, bias=0.67):
+    def volumeCrop(self, image, mask, metadata, patchSize=128, bias=0.67):
         ph, pw, pd = patchSize, patchSize, patchSize
         h, w, d = mask.shape
 
@@ -123,11 +127,11 @@ class BraTSData(Dataset):
         y = max(0, min(y, w - pw))
         z = max(0, min(z, d - pd))
 
-        return image[:, x:x+ph, y:y+pw, z:z+pd], mask[x:x+ph, y:y+pw, z:z+pd]
+        return image[:, x:x+ph, y:y+pw, z:z+pd], mask[x:x+ph, y:y+pw, z:z+pd], metadata.iloc[x: x + ph]
 
     def __len__(self):
         if self.config.trainingSet == "volumetric":
-            return len(self.volumeNames) * self.config.patchesPerVolume
+            return len(self.volumeNames)
 
         elif self.config.trainingSet == "slices":
             return len(self.indices)
@@ -137,7 +141,10 @@ class BraTSData(Dataset):
         if self.config.trainingSet == "volumetric":
             volumeIdx = key % len(self.volumeNames)
             image, mask = self.loadVolume(self.volumeNames[volumeIdx])
-            return self.volumeCrop(image, mask)
+            metadata = self.metadata[self.metadata.volume == self.volumeNames[volumeIdx]].sort_values(by="slice")
+            # image, mask, metadata = self.volumeCrop(image, mask, metadata)
+            sliceLabels = torch.tensor(metadata["target"].to_numpy(), dtype=torch.long)
+            return {"image": image, "mask": mask, "targets": sliceLabels}
 
         elif self.config.trainingSet == "slices":
             image, mask = self.loadSlice(self.validPaths[key])
