@@ -16,7 +16,7 @@ class BraTSM3D(nn.Module):
 
         print("DEFAULT DEVICE:", torch.get_default_device())
 
-        self.encoder = AutoModel.from_pretrained(config.encoder, trust_remote_code=True, device_map=None, low_cpu_mem_usage=False)
+        self.encoder = AutoModel.from_pretrained(config.encoder, trust_remote_code=True, device_map=None, low_cpu_mem_usage=False, _fast_init=False)
         self.encoder.requires_grad_(config.trainEncoder)
         self.numPatches = (config.imageSize * config.imageSize * 32) // (16 * 16 * 4)
 
@@ -33,9 +33,14 @@ class BraTSM3D(nn.Module):
         x = volume.permute(0, 2, 1, 3, 4)
         x = self.modalityProjection(x)
         x = nn.functional.interpolate(x, size=(32, 256, 256), mode="trilinear", align_corners=False)
+
+        p1 = torch.quantile(x.float(), 0.01)
+        p99 = torch.quantile(x.float(), 0.99)
+        x = x.clamp(p1, p99)
+
         # TODO: Check normalization
-        x = x - x.amin(dim=-1, keepdim=True)
-        x = x / (x.amax(dim=-1, keepdim=True)[0] + 1e-5)
+        x = x - x.amin(dim=(-3, -2, -1), keepdim=True)
+        x = x / (x.amax(dim=(-3, -2, -1), keepdim=True) + 1e-5)
         return x
 
     def forward(self, inputs):
