@@ -137,14 +137,13 @@ class BraTSData(Dataset):
             return len(self.indices)
     
     def __getitem__(self, key):
-        # TODO: Return other statistics about volumes/slices (age, ttd)
         if self.config.trainingSet == "volumetric":
             volumeIdx = key % len(self.volumeNames)
             image, mask = self.loadVolume(self.volumeNames[volumeIdx])
             metadata = self.metadata[self.metadata.volume == self.volumeNames[volumeIdx]].sort_values(by="slice")
             # image, mask, metadata = self.volumeCrop(image, mask, metadata)
             sliceLabels = torch.tensor(metadata["target"].to_numpy(), dtype=torch.float32)
-            return {"image": image, "mask": mask, "targets": sliceLabels}
+            return {"images": image, "masks": mask, "targets": sliceLabels}
 
         elif self.config.trainingSet == "slices":
             image, mask = self.loadSlice(self.validPaths[key])

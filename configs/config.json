@@ -6,5 +6,8 @@
     "targets": 155,
     "encoder": "GoodBaiBai88/M3D-CLIP",
     "trainEncoder": true,
-    "outputs": "categorical"
+    "outputs": "categorical",
+    "alpha": 0.5,
+    "topK": 0.5,
+    "positiveOnly": true
 }

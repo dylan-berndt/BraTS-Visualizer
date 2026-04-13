@@ -7,9 +7,8 @@ config = Config().load(os.path.join("configs", "config.json"))
 dataset = BraTSData(config)
 
 model = BraTSM3D(config).to(DEVICE)
+gradcam = GradCAM3D(model)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-
-objective = nn.BCEWithLogitsLoss()
 
 
 class AUC(nn.Module):
@@ -31,29 +30,35 @@ for epoch in range(10):
     train = DataLoader(trainSet, batch_size=4, shuffle=True)
     for b, batch in enumerate(train):
         batch = {k: v.to(DEVICE) for k, v in batch.items()}
-        outputs = model(batch)
-
-        loss = objective(outputs, batch["targets"])
-
         optimizer.zero_grad()
-        loss.backward()
+
+        logits = model(batch["images"])
+
+        totalLoss, bceLoss, expLoss = calculateLoss(logits, batch["targets"], batch["masks"], model, gradcam, config)
+        totalLoss.backward()
         optimizer.step()
 
-        score = auc(outputs, batch["targets"])
+        score = auc(logits, batch["targets"])
 
-        print(f"\rEpoch {epoch} | {b}/{len(train)} | Train Loss: {loss.item()} | Train AUC: {score}", end="")
+        print(f"\rEpoch {epoch + 1} | {b + 1}/{len(train)} | Train Loss: {totalLoss.item()} | Train AUC: {score}", end="")
 
-    test = DataLoader(testSet, batch_size=8, shuffle=True)
+    test = DataLoader(testSet, batch_size=4, shuffle=True)
+    testAverageLoss = 0
+    testAverageAUC = 0
+    testTotal = 0
     for b, batch in enumerate(test):
         batch = {k: v.to(DEVICE) for k, v in batch.items()}
-        outputs = model(batch)
+        logits = model(batch["images"])
 
-        loss = objective(outputs, batch["targets"])
+        bceLoss = F.binary_cross_entropy_with_logits(logits, batch["targets"])
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        score = auc(logits, batch["targets"])
 
-        score = auc(outputs, batch["targets"])
+        total = batch["images"].shape[0]
+        testAverageLoss = (testAverageLoss * testTotal + bceLoss) / (testTotal + total)
+        testAverageAUC = (testAverageAUC * testTotal + score) / (testTotal + total)
+        testTotal += total
 
-        print(f"\rEpoch {epoch} | {b}/{len(train)} | Test Loss: {loss.item()} | Test AUC: {score}", end="")
+        print(f"\rEpoch {epoch + 1} | {b + 1}/{len(train)} | Test Loss: {totalLoss.item()} | Test AUC: {score}", end="")
+
+    print(f"Epoch {epoch + 1} | Test Loss: {testAverageLoss} | Test AUC: {testAverageAUC} {' ' * 50}")
