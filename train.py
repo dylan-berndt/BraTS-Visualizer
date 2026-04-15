@@ -26,7 +26,7 @@ auc = AUC()
 
 trainSet, testSet = torch.utils.data.random_split(dataset, [0.8, 0.2])
 
-for epoch in range(10):
+for epoch in range(1):
     model.train()
     train = DataLoader(trainSet, batch_size=4, shuffle=True)
     for b, batch in enumerate(train):
@@ -65,3 +65,12 @@ for epoch in range(10):
             print(f"\rEpoch {epoch + 1} | {b + 1}/{len(test)} | Test Loss: {bceLoss.item():.2f} | Test AUC: {score:.2f}", end="")
 
     print(f"\rEpoch {epoch + 1} | Test Loss: {testAverageLoss:.2f} | Test AUC: {testAverageAUC:.2f} {' ' * 50}")
+
+    print("\nExporting saliency maps...")
+
+    generateSaliencyMaps(
+        model,
+        test,
+        config=config,
+        device=DEVICE
+    )

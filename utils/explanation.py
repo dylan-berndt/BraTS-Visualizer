@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
+import os
+import numpy as np
 
 
 class ExplanationScore(Enum):
@@ -121,3 +123,33 @@ def calculateLoss(logits, labels, masks, model, gradcam, config):
 
     totalLoss = bceLoss + config.alpha * expLoss
     return totalLoss, bceLoss, expLoss
+
+
+def generateSaliencyMaps(model, loader, config, device):
+    os.makedirs(config.saliencyDirectory, exist_ok=True)
+    gradcam = GradCAM3D(model)
+    model.eval()
+
+    print()
+
+    for i, batch in enumerate(loader):
+        batch = {k: v.to(device) for k, v in batch.items()}
+        logits = model(batch(["images"]))
+
+        model.zero_grad()
+        active = batch["targets"] > 0.5
+        score = computeScore(
+            ExplanationScore.LOGIT_SQR,
+            logits,
+            active
+        )
+
+        score.backward()
+
+        cam = gradcam.computeCam()
+        cam = cam.squeeze(1).cpu().numpy()
+
+        for n, name in enumerate(batch["names"]):
+            np.save(os.path.join(config.saliencyDirectory, f"{name}_saliency.npy"), cam[n])
+
+        print(f"\rSaved {i+1}/{len(loader)}", end="")

@@ -143,7 +143,7 @@ class BraTSData(Dataset):
             metadata = self.metadata[self.metadata.volume == self.volumeNames[volumeIdx]].sort_values(by="slice")
             # image, mask, metadata = self.volumeCrop(image, mask, metadata)
             sliceLabels = torch.tensor(metadata["target"].to_numpy(), dtype=torch.float32)
-            return {"images": image, "masks": mask, "targets": sliceLabels}
+            return {"images": image, "masks": mask, "targets": sliceLabels, "names": [self.volumeNames[volumeIdx]]}
 
         elif self.config.trainingSet == "slices":
             image, mask = self.loadSlice(self.validPaths[key])

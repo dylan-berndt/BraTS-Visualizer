@@ -21,24 +21,17 @@ state.volumeOptions = [{"title": str(n), "value": str(n)} for n in dataset.volum
 state.sliceOption = str(0)
 state.sliceOptions = [{"title": str(n), "value": str(n)} for n in range(4)]
 
+state.overlayMode = "tumor"  # default
+state.overlayOptions = [
+    {"title": "Tumor Mask", "value": "tumor"},
+    {"title": "Saliency", "value": "saliency"},
+]
+
 pv.set_plot_theme('dark')
 pl = pv.Plotter()
 
 
-def loadVolume(volumeName, sliceOption):
-    pl.clear()
-    mriVolume, tumorVolume = dataset.loadVolume(volumeName)
-    print(mriVolume.shape)
-    mriVolume = mriVolume[:, int(sliceOption)].numpy()
-    tumorVolume = tumorVolume.numpy()
-    
-    mriVolume = np.transpose(mriVolume, (1, 2, 0))
-    tumorVolume = np.transpose(tumorVolume, (1, 2, 0))
-
-    grid = pv.ImageData(dimensions=mriVolume.shape)
-    grid.point_data["MRI"] = mriVolume.flatten(order="F")
-    pl.add_volume(grid, cmap="bone_r")
-
+def drawTumorGrid(tumorVolume):
     tumorGrid = pv.ImageData(dimensions=tumorVolume.shape)
     tumorGrid.point_data["tumor"] = tumorVolume.flatten(order="F")
 
@@ -61,14 +54,53 @@ def loadVolume(volumeName, sliceOption):
         size=(0.25, 0.25)
     )
 
+
+def drawSaliency(volumeName):
+    saliencyPath = os.path.join(config.saliencyDirectory, f"{volumeName}_saliency.npy")
+
+    if os.path.exists(saliencyPath):
+        saliency = np.load(saliencyPath)
+
+        saliency = np.transpose(saliency, (1, 2, 0))
+
+        salGrid = pv.ImageData(dimensions=saliency.shape)
+        salGrid.point_data["saliency"] = saliency.flatten(order="F")
+
+        pl.add_volume(
+            salGrid,
+            cmap="hot",
+            opacity="sigmoid",
+            blending="additive"
+        )
+
+
+def loadVolume(volumeName, sliceOption, overlayMode):
+    pl.clear()
+    mriVolume, tumorVolume = dataset.loadVolume(volumeName)
+    print(mriVolume.shape)
+    mriVolume = mriVolume[:, int(sliceOption)].numpy()
+    tumorVolume = tumorVolume.numpy()
+    
+    mriVolume = np.transpose(mriVolume, (1, 2, 0))
+    tumorVolume = np.transpose(tumorVolume, (1, 2, 0))
+
+    grid = pv.ImageData(dimensions=mriVolume.shape)
+    grid.point_data["MRI"] = mriVolume.flatten(order="F")
+    pl.add_volume(grid, cmap="bone_r")
+
+    if overlayMode == "tumor":
+        drawTumorGrid(tumorVolume)
+    elif overlayMode == "saliency":
+        drawSaliency(volumeName)
+
     pl.reset_camera()
     ctrl.view_update()  # tells Trame to push the new render to the browser
 
 
 # Trame state change listener — fires whenever state.volume_name changes
-@state.change("volumeName", "slice")
-def onVolumeChange(volumeName, sliceOption, **kwargs):
-    loadVolume(volumeName, sliceOption)
+@state.change("volumeName", "sliceOption", "overlayMode")
+def onVolumeChange(volumeName, sliceOption, overlayMode, **kwargs):
+    loadVolume(volumeName, sliceOption, overlayMode)
 
 
 with SinglePageLayout(server, dark=True) as layout:
@@ -91,6 +123,15 @@ with SinglePageLayout(server, dark=True) as layout:
             density="compact",
             hide_details=True,
             style="max-width: 300px;",
+        )
+
+        v3.VSelect(
+            label="Overlay",
+            v_model=("overlayMode",),
+            items=("overlayOptions",),
+            density="compact",
+            hide_details=True,
+            style="max-width: 200px;",
         )
 
     with layout.content:
