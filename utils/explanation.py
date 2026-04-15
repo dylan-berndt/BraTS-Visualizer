@@ -133,7 +133,7 @@ def generateSaliencyMaps(model, loader, config, device):
     print()
 
     for i, batch in enumerate(loader):
-        batch = {k: v.to(DEVICE) if type(v) != list else v for k, v in batch.items()}
+        batch = {k: v.to(device) if type(v) != list else v for k, v in batch.items()}
         logits = model(batch(["images"]))
 
         model.zero_grad()
