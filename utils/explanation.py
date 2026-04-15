@@ -149,7 +149,12 @@ def generateSaliencyMaps(model, loader, config, device):
         cam = gradcam.computeCam()
         cam = cam.squeeze(1).cpu().numpy()
 
-        for n, name in enumerate(batch["names"]):
+        names = batch["names"]
+
+        if torch.is_tensor(names):
+            names = names.tolist()
+
+        for n, name in enumerate(names):
             np.save(os.path.join(config.saliencyDirectory, f"{name}_saliency.npy"), cam[n])
 
         print(f"\rSaved {i+1}/{len(loader)}", end="")
