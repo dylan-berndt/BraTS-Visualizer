@@ -15,7 +15,7 @@ server = get_server()
 state, ctrl = server.state, server.controller
 
 state.volumeName = str(dataset.volumeNames[0])
-state.volumeOptions = [{"title": str(n), "value": str(n)} for n in dataset.volumeNames]
+state.volumeOptions = [{"title": str(n), "value": str(n)} for n in sorted(dataset.volumeNames)]
 
 # TODO: Actual names of slices
 state.sliceOption = str(0)
@@ -60,18 +60,25 @@ def drawSaliency(volumeName):
 
     if os.path.exists(saliencyPath):
         saliency = np.load(saliencyPath)
+        print(saliency.shape, np.min(saliency), np.max(saliency))
 
         saliency = np.transpose(saliency, (1, 2, 0))
 
         salGrid = pv.ImageData(dimensions=saliency.shape)
         salGrid.point_data["saliency"] = saliency.flatten(order="F")
 
-        pl.add_volume(
-            salGrid,
-            cmap="hot",
-            opacity="sigmoid",
-            blending="additive"
-        )
+        threshold = np.quantile(saliency, 0.5)
+        region = salGrid.threshold((threshold, saliency.max()))
+
+        if region.n_points > 0:
+            pl.add_mesh(region, color="yellow", opacity=0.5)
+
+            pl.add_legend(
+                [["Saliency (Top 20%)", "yellow"]],
+                bcolor="black",
+                border=True,
+                size=(0.25, 0.25)
+            )
 
 
 def loadVolume(volumeName, sliceOption, overlayMode):

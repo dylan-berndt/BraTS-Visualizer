@@ -130,13 +130,12 @@ def generateSaliencyMaps(model, loader, config, device):
     gradcam = GradCAM3D(model)
     model.eval()
 
-    print()
-
     for i, batch in enumerate(loader):
         batch = {k: v.to(device) if type(v) != list else v for k, v in batch.items()}
-        logits = model(batch["images"])
-
         model.zero_grad()
+
+        logits = model(batch["images"])
+        
         active = batch["targets"] > 0.5
         score = computeScore(
             ExplanationScore.LOGIT_SQR,
