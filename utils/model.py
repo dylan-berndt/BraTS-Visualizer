@@ -50,7 +50,7 @@ class BraTSM3D(nn.Module):
         x, _ = self.encoder.vision_encoder(x)
         x = self.encoder.mm_vision_proj(x)
 
-        if self.training:
+        if torch.is_grad_enabled():
             x.retain_grad()
             self.lastTokens = x
 
