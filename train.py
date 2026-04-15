@@ -30,7 +30,7 @@ for epoch in range(1):
     model.train()
     train = DataLoader(trainSet, batch_size=4, shuffle=True)
     for b, batch in enumerate(train):
-        batch = {k: v.to(DEVICE) for k, v in batch.items()}
+        batch = {k: v.to(DEVICE) if type(v) != list else v for k, v in batch.items()}
         optimizer.zero_grad()
 
         logits = model(batch["images"])
@@ -50,7 +50,7 @@ for epoch in range(1):
     with torch.no_grad():
         model.eval()
         for b, batch in enumerate(test):
-            batch = {k: v.to(DEVICE) for k, v in batch.items()}
+            batch = {k: v.to(DEVICE) if type(v) != list else v for k, v in batch.items()}
             logits = model(batch["images"])
 
             bceLoss = F.binary_cross_entropy_with_logits(logits, batch["targets"])
