@@ -50,8 +50,9 @@ class BraTSM3D(nn.Module):
         x, _ = self.encoder.vision_encoder(x)
         x = self.encoder.mm_vision_proj(x)
 
-        x.retain_grad()
-        self.lastTokens = x
+        if self.training:
+            x.retain_grad()
+            self.lastTokens = x
 
         if self.config.outputs == "segmentation":
             B, N, C = x.shape
