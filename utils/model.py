@@ -47,12 +47,14 @@ class BraTSM3D(nn.Module):
         x = self.preprocess(inputs)
 
         # Don't use the encode_image function to prevent normalization
-        x, _ = self.encoder.vision_encoder(x)
+        x, states = self.encoder.vision_encoder(x)
         x = self.encoder.mm_vision_proj(x)
 
+        # Extract hidden state before final attention, allows for gradient flow through CLS
         if torch.is_grad_enabled():
-            x.retain_grad()
-            self.lastTokens = x
+            lastHidden = states[-2]
+            lastHidden.retain_grad()
+            self.lastTokens = lastHidden
 
         if self.config.outputs == "segmentation":
             B, N, C = x.shape
