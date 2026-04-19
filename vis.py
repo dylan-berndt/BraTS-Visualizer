@@ -14,14 +14,14 @@ dataset = BraTSData(config)
 server = get_server()
 state, ctrl = server.state, server.controller
 
-state.volumeName = str(dataset.volumeNames[0])
+state.volumeName = str(44)
 state.volumeOptions = [{"title": str(n), "value": str(n)} for n in sorted(dataset.volumeNames)]
 
 # TODO: Actual names of slices
 state.sliceOption = str(0)
 state.sliceOptions = [{"title": str(n), "value": str(n)} for n in range(4)]
 
-state.overlayMode = "tumor"  # default
+state.overlayMode = "saliency"  # default
 state.overlayOptions = [
     {"title": "Tumor Mask", "value": "tumor"},
     {"title": "Saliency", "value": "saliency"},
@@ -67,7 +67,7 @@ def drawSaliency(volumeName):
         salGrid = pv.ImageData(dimensions=saliency.shape)
         salGrid.point_data["saliency"] = saliency.flatten(order="F")
 
-        threshold = np.quantile(saliency, 0.5)
+        threshold = np.quantile(saliency, 0.8)
         region = salGrid.threshold((threshold, saliency.max()))
 
         if region.n_points > 0:
