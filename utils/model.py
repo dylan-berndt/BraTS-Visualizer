@@ -52,6 +52,9 @@ class BraTSM3D(nn.Module):
 
         # Extract hidden state before final attention, allows for gradient flow through CLS
         if torch.is_grad_enabled():
+            for i in range(len(states)):
+                states[i].retain_grad()
+            self.allTokens = states
             lastHidden = states[-2]
             lastHidden.retain_grad()
             self.lastTokens = lastHidden

@@ -7,7 +7,7 @@
     "encoder": "GoodBaiBai88/M3D-CLIP",
     "trainEncoder": true,
     "outputs": "categorical",
-    "alpha": 0.2,
+    "alpha": 0.0,
     "topK": 0.5,
     "positiveOnly": true,
     "saliencyDirectory": "saliency"

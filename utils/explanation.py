@@ -68,16 +68,20 @@ class GradCAM3D(nn.Module):
         tokens = self.model.lastTokens
         assert tokens.grad is not None, "No grad on lastTokens, retain_grad() set?"
 
-        # print("===== HERE =====")
-        # print(tokens.grad.amax(), tokens.grad.amin(), tokens.grad.shape)
-        # print("cls grad:", tokens.grad[:, 0, :].abs().max())
-        # print("patch grad:", tokens.grad[:, 1:, :].abs().max())
+        print("===== HERE =====")
+        print(tokens.grad.amax(), tokens.grad.amin(), tokens.grad.shape)
+        print("cls grad:", tokens.grad[:, 0, :].abs().max())
+        print("patch grad:", tokens.grad[:, 1:, :].abs().max())
+
+        for i in range(len(self.model.allTokens)):
+            t = self.model.allTokens[i].grad
+            print(t.amin(), t.amax())
 
         features  = self._tokensToVolume(tokens.detach())
         gradients = self._tokensToVolume(tokens.grad.abs())
 
-        # print(features.amin(), features.amax())
-        # print(gradients.amin(), gradients.amax())
+        print(features.amin(), features.amax())
+        print(gradients.amin(), gradients.amax())
 
         weights = gradients.mean(dim=(-3, -2, -1), keepdim=True)
         cam = (weights * features).sum(dim=1, keepdim=True)
@@ -89,10 +93,10 @@ class GradCAM3D(nn.Module):
         camMin = camFlat.min(dim=1).values.view(B, 1, 1, 1, 1)
         camMax = camFlat.max(dim=1).values.view(B, 1, 1, 1, 1)
 
-        # print(camMin.squeeze(), camMax.squeeze())
-        # print("===== THERE =====")
+        print(camMin.squeeze(), camMax.squeeze())
+        print("===== THERE =====")
 
-        # print()
+        print()
 
         cam = (cam - camMin) / (camMax - camMin + 1e-8)
         return cam
@@ -160,6 +164,9 @@ def generateSaliencyMaps(model, loader, config, device):
         score.backward()
 
         cam = gradcam.computeCam()
+
+        print(cam.amin(), cam.amax())
+
         cam = cam.squeeze(1).cpu().numpy()
 
         names = batch["names"]
