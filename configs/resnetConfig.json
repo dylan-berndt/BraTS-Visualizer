@@ -7,6 +7,7 @@
     "positiveOnly": true,
     "trainEncoder": false,
     "saliencyDirectory": "saliency",
+    "sampleDirectory": "saliencySamples",
     "batchSize": 64,
     "learningRate": 3e-4
 }
