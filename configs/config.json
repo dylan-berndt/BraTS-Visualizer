@@ -11,5 +11,6 @@
     "topK": 0.5,
     "positiveOnly": true,
     "saliencyDirectory": "saliency",
-    "cache": "F:/.cache/kagglehub/datasets/awsaf49/brats2020-training-data"
+    "cache": "F:/.cache/kagglehub/datasets/awsaf49/brats2020-training-data",
+    "batchSize": 4
 }

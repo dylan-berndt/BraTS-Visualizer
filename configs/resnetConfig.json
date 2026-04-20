@@ -1,0 +1,12 @@
+{
+    "train": true,
+    "trainingSet": "slices",
+    "labels": 4,
+    "alpha": 0.2,
+    "topK": 0.5,
+    "positiveOnly": true,
+    "trainEncoder": false,
+    "saliencyDirectory": "saliency",
+    "batchSize": 64,
+    "learningRate": 3e-4
+}

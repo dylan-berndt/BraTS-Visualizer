@@ -51,6 +51,32 @@ def computeScore(formulation: ExplanationScore, logits: torch.Tensor, activeTarg
     return scores.sum()
 
 
+class GradCAM2D(nn.Module):
+    def __init__(self, model: nn.Module, upsample: tuple = (240, 240)):
+        super().__init__()
+        self.model = model
+        self.upsample = upsample
+
+    def computeCam(self):
+        tokens = self.model.representation
+        assert tokens.grad is not None, "No grad on lastTokens, retain_grad() set?"
+
+        weights = tokens.grad.mean(dim=(-2, -1), keepdim=True)
+        cam = (weights * tokens).sum(dim=1, keepdim=True)
+        cam = F.relu(cam)
+        cam = F.interpolate(cam, size=self.upsample, mode="bilinear", align_corners=False)
+
+        cam = cam.squeeze(1)
+
+        B = cam.shape[0]
+        camFlat = cam.view(B, -1)
+        camMin = camFlat.min(dim=1).values.view(B, 1, 1)
+        camMax = camFlat.max(dim=1).values.view(B, 1, 1)
+
+        cam = (cam - camMin) / (camMax - camMin + 1e-8)
+        return cam
+
+
 class GradCAM3D(nn.Module):
     def __init__(self, model: nn.Module, upsample: tuple = (155, 240, 240)):
         super().__init__()
@@ -65,17 +91,13 @@ class GradCAM3D(nn.Module):
         return x
     
     def computeCam(self):
-        tokens = self.model.lastTokens
+        tokens = self.model.representation
         assert tokens.grad is not None, "No grad on lastTokens, retain_grad() set?"
 
         print("===== HERE =====")
         print(tokens.grad.amax(), tokens.grad.amin(), tokens.grad.shape)
         print("cls grad:", tokens.grad[:, 0, :].abs().max())
         print("patch grad:", tokens.grad[:, 1:, :].abs().max())
-
-        for i in range(len(self.model.allTokens)):
-            t = self.model.allTokens[i].grad
-            print(t.amin(), t.amax())
 
         features  = self._tokensToVolume(tokens.detach())
         gradients = self._tokensToVolume(tokens.grad.abs())
@@ -104,6 +126,7 @@ class GradCAM3D(nn.Module):
 
 def explanationLoss(cam, mask, topK = 0.5):
     B = cam.shape[0]
+
     camFlat = cam.view(B, -1)
     maskFlat = mask.view(B, -1).float()
 
@@ -126,8 +149,8 @@ def calculateLoss(logits, labels, masks, model, gradcam, config):
     active = labels > 0.5
     activeTargets = active if config.positiveOnly else torch.ones_like(labels, dtype=torch.bool)
 
-    if model.lastTokens.grad is not None:
-        model.lastTokens.grad.zero_()
+    if model.representation.grad is not None:
+        model.representation.grad.zero_()
 
     score = computeScore(ExplanationScore.LOGIT_SQR, logits, activeTargets)
     score.backward(retain_graph=True)
@@ -143,9 +166,8 @@ def calculateLoss(logits, labels, masks, model, gradcam, config):
     return totalLoss, bceLoss, expLoss
 
 
-def generateSaliencyMaps(model, loader, config, device):
+def generateSaliencyMaps(model, gradcam, loader, config, device):
     os.makedirs(config.saliencyDirectory, exist_ok=True)
-    gradcam = GradCAM3D(model)
     model.eval()
 
     for i, batch in enumerate(loader):
@@ -165,9 +187,9 @@ def generateSaliencyMaps(model, loader, config, device):
 
         cam = gradcam.computeCam()
 
-        print(cam.amin(), cam.amax())
+        # print(cam.amin(), cam.amax())
 
-        cam = cam.squeeze(1).cpu().numpy()
+        cam = cam.detach().squeeze(1).cpu().numpy()
 
         names = batch["names"]
 

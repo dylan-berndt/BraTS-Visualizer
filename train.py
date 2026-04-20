@@ -3,12 +3,12 @@ from sklearn.metrics import roc_auc_score
 
 DEVICE = "cuda:1"
 
-config = Config().load(os.path.join("configs", "config.json"))
+config = Config().load(os.path.join("configs", "resnetConfig.json"))
 dataset = BraTSData(config)
 
-model = BraTSM3D(config).to(DEVICE)
-gradcam = GradCAM3D(model)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+model = BraTSNet50(config).to(DEVICE)
+gradcam = GradCAM2D(model)
+optimizer = torch.optim.Adam(model.parameters(), lr=config.learningRate)
 
 
 class AUC(nn.Module):
@@ -26,9 +26,9 @@ auc = AUC()
 
 trainSet, testSet = torch.utils.data.random_split(dataset, [0.8, 0.2])
 
-for epoch in range(1):
+for epoch in range(10):
     model.train()
-    train = DataLoader(trainSet, batch_size=4, shuffle=True)
+    train = DataLoader(trainSet, batch_size=config.batchSize, shuffle=True)
     for b, batch in enumerate(train):
         batch = {k: v.to(DEVICE) if type(v) != list else v for k, v in batch.items()}
         optimizer.zero_grad()
@@ -43,7 +43,7 @@ for epoch in range(1):
 
         print(f"\rEpoch {epoch + 1} | {b + 1}/{len(train)} | Train Loss: {totalLoss.item():.2f} | Train AUC: {score:.2f}", end="")
 
-    test = DataLoader(testSet, batch_size=4, shuffle=True)
+    test = DataLoader(testSet, batch_size=config.batchSize, shuffle=True)
     testAverageLoss = 0
     testAverageAUC = 0
     testTotal = 0
@@ -66,11 +66,12 @@ for epoch in range(1):
 
     print(f"\rEpoch {epoch + 1} | Test Loss: {testAverageLoss:.2f} | Test AUC: {testAverageAUC:.2f} {' ' * 50}")
 
-    print("\nExporting saliency maps...")
+print("\nExporting saliency maps...")
 
-    generateSaliencyMaps(
-        model,
-        test,
-        config=config,
-        device=DEVICE
-    )
+generateSaliencyMaps(
+    model,
+    gradcam,
+    test,
+    config=config,
+    device=DEVICE
+)

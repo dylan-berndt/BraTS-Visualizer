@@ -33,18 +33,7 @@ class BraTSData(Dataset):
         else:
             self.path = config.path
 
-        # Looks like every file is valid, not sure why everyone had a check
         sliceFiles = glob(os.path.join(self.path, "**", "*.h5"), recursive=True)
-        # print("Checking valid slices...")
-        # indices = []
-        # validPaths = []
-        # sliceData = loadSeveral(sliceFiles, self.loadSlice, "slice")
-        # for i, data in enumerate(sliceData):
-        #     if data is not None:
-        #         indices.append(i)
-        #         validPaths.append(sliceFiles[i])
-
-        # print(len(indices), len(sliceFiles))
 
         self.indices = np.arange(len(sliceFiles))
         self.validPaths = sliceFiles
@@ -147,7 +136,11 @@ class BraTSData(Dataset):
 
         elif self.config.trainingSet == "slices":
             image, mask = self.loadSlice(self.validPaths[key])
-            return image, mask
+            volumeName = self.validPaths[key].split("_")[-3]
+            sliceName = self.validPaths[key].split("_")[-1].split(".")[0]
+            metadata = self.metadata[(self.metadata.volume == int(volumeName)) & (self.metadata.slice == int(sliceName))]
+            label = torch.tensor(metadata["target"].to_numpy(), dtype=torch.float32)
+            return {"images": image, "masks": mask, "targets": label, "names": volumeName + "_" + sliceName}
 
 
 if __name__ == "__main__":
