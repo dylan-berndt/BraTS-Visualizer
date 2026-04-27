@@ -41,12 +41,11 @@ class BraTSViT(nn.Module):
 
     def _save_activations(self, module, inputs, outputs):
         if torch.is_grad_enabled():
-            tokens = outputs[:, 1:]
-            B, N, C = tokens.shape
-            self.representation = tokens.reshape(B, int(math.sqrt(N)), int(math.sqrt(N)), C)
+            self.representation = outputs
             self.representation.retain_grad()
 
     def preprocess(self, images):
+        images = nn.functional.interpolate(images, size=(224, 224), mode="bilinear", align_corners=False)
         mean = images.mean(dim=(-2, -1), keepdim=True)
         std  = images.std(dim=(-2, -1), keepdim=True).clamp(min=1e-6)
         return (images - mean) / std

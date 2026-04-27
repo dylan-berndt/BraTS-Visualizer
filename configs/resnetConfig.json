@@ -2,12 +2,13 @@
     "train": true,
     "trainingSet": "slices",
     "labels": 4,
-    "alpha": 0.2,
-    "topK": 0.5,
+    "topK": 0.2,
+    "tau": 0.01,
     "positiveOnly": true,
-    "trainEncoder": false,
+    "trainEncoder": true,
     "saliencyDirectory": "saliency",
     "sampleDirectory": "saliencySamples",
     "batchSize": 64,
-    "learningRate": 3e-4
+    "learningRate": 3e-4,
+    "epochs": 20
 }

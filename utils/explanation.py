@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 import os
 import numpy as np
+import math
 
 
 class ExplanationScore(Enum):
@@ -24,7 +25,7 @@ class ExplanationScore(Enum):
 
 def computeScore(formulation: ExplanationScore, logits: torch.Tensor, activeTargets: Optional[torch.Tensor] = None):
     z1 = logits
-    z0 = torch.zeros_like(z1)
+    z0 = torch.zeros_like(logits)
 
     if formulation == ExplanationScore.LOGIT_ONLY:
         scores = z1
@@ -61,8 +62,22 @@ class GradCAM2D(nn.Module):
         tokens = self.model.representation
         assert tokens.grad is not None, "No grad on lastTokens, retain_grad() set?"
 
-        weights = tokens.grad.mean(dim=(-2, -1), keepdim=True)
-        cam = (weights * tokens).sum(dim=1, keepdim=True)
+        acts = tokens
+        grad = tokens.grad
+
+        if len(tokens.shape) == 3:
+            def reshape(tensor):
+                tensor = tensor[:, 1:]
+                B, N, C = tensor.shape
+                tensor = tensor.reshape(B, int(math.sqrt(N)), int(math.sqrt(N)), C)
+                tensor = nn.functional.interpolate(tensor, size=(240, 240), mode="bilinear", align_corners=False)
+                return tensor
+
+            acts = reshape(acts)
+            grad = reshape(grad)
+
+        weights = grad.mean(dim=(-2, -1), keepdim=True)
+        cam = (weights * acts).sum(dim=1, keepdim=True)
         cam = F.relu(cam)
         cam = F.interpolate(cam, size=self.upsample, mode="bilinear", align_corners=False)
 
@@ -140,11 +155,11 @@ def explanationLoss(cam, mask, topK = 0.5):
     return loss.mean()
 
 
-def calculateLoss(logits, labels, masks, model, gradcam, config):
-    bceLoss = F.binary_cross_entropy_with_logits(logits, labels)
+def calculateLoss(logits, labels, masks, model, gradcam, config, alpha=0.5):
+    bceLoss = F.binary_cross_entropy_with_logits(logits.squeeze(), labels.squeeze())
 
-    if config.alpha == 0.0 or masks is None:
-        return bceLoss, bceLoss, None
+    if alpha == 0.0 or masks is None:
+        return bceLoss, bceLoss, None, ExplanationMetrics(*[0 for i in range(7)])
     
     active = labels > 0.5
     activeTargets = active if config.positiveOnly else torch.ones_like(labels, dtype=torch.bool)
@@ -162,8 +177,10 @@ def calculateLoss(logits, labels, masks, model, gradcam, config):
     
     expLoss = explanationLoss(cam[positiveSamples], mask[positiveSamples], config.topK)
 
-    totalLoss = bceLoss + config.alpha * expLoss
-    return totalLoss, bceLoss, expLoss
+    metrics = computeExplanationMetrics(cam, mask, config)
+
+    totalLoss = bceLoss + alpha * expLoss
+    return totalLoss, bceLoss, expLoss, metrics
 
 
 def generateSaliencyMaps(model, gradcam, loader, config, device):
@@ -200,3 +217,55 @@ def generateSaliencyMaps(model, gradcam, loader, config, device):
             np.save(os.path.join(config.saliencyDirectory, f"{name}_saliency.npy"), cam[n])
 
         print(f"\rSaved {i+1}/{len(loader)}", end="")
+
+
+@dataclass
+class ExplanationMetrics:
+    topSaliencyPrecision: float
+    allSaliencyPrecision: float
+    topSaliencyRecall: float
+    allSaliencyRecall: float
+    topSaliencyF1: float
+    allSaliencyF1: float
+    annotationCoverage: float
+
+
+@torch.no_grad()
+def computeExplanationMetrics(cam, mask, config):
+    B = cam.shape[0]
+    camFlat = cam.view(B, -1)
+    maskFlat = mask.view(B, -1).float()
+
+    threshold = torch.quantile(camFlat, 1.0 - config.topK, dim=1, keepdim=True)
+    hPlus = (camFlat >= threshold).float()
+    
+    truePositives = (hPlus * maskFlat).sum(dim=1)
+    falsePositives = (hPlus * (1.0 - maskFlat)).sum(dim=1)
+    falseNegatives = ((1.0 - hPlus) * maskFlat).sum(dim=1)
+
+    topPrecision = truePositives / (truePositives + falsePositives + 1e-8)
+    topRecall = truePositives / (truePositives + falseNegatives + 1e-8)    
+    topF1 = (2 * topPrecision * topRecall) / (topPrecision + topRecall + 1e-8)
+
+    truePositives = (camFlat * maskFlat).sum(dim=1)
+    falsePositives = (camFlat * (1.0 - maskFlat)).sum(dim=1)
+    falseNegatives = ((1.0 - camFlat) * maskFlat).sum(dim=1)
+
+    allPrecision = truePositives / (truePositives + falsePositives + 1e-8)
+    allRecall = truePositives / (truePositives + falseNegatives + 1e-8)    
+    allF1 = (2 * allPrecision * allRecall) / (allPrecision + allRecall + 1e-8)
+
+    maskSize = maskFlat.sum(dim=1).clamp(min=1)
+    overlap = (hPlus * maskFlat).sum(dim=1)
+    covered = (overlap / maskSize >= config.tau).float()
+    coverage = covered.mean().item()
+
+    return ExplanationMetrics(
+        topPrecision.mean().item(),
+        allPrecision.mean().item(),
+        topRecall.mean().item(),
+        allRecall.mean().item(),
+        topF1.mean().item(),
+        allF1.mean().item(),
+        coverage
+    )
