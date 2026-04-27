@@ -158,7 +158,7 @@ def explanationLoss(cam, mask, topK = 0.5):
 def calculateLoss(logits, labels, masks, model, gradcam, config, alpha=0.5):
     bceLoss = F.binary_cross_entropy_with_logits(logits.squeeze(), labels.squeeze())
 
-    if alpha == 0.0 or masks is None:
+    if masks is None:
         return bceLoss, bceLoss, None, ExplanationMetrics(*[0 for i in range(7)])
     
     active = labels > 0.5
