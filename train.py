@@ -8,7 +8,6 @@ ALPHAS = [0.0, 0.25, 0.5, 0.75, 1.0]
 ENCODER_FROZEN = [True, False]
 MODELS = ["ResNet50", "ViT"]
 
-
 class AUC(nn.Module):
     def __init__(self):
         super().__init__()
@@ -199,9 +198,9 @@ def main():
 
     trainSet, testSet = torch.utils.data.random_split(dataset, [0.8, 0.2])
 
-    for modelName in MODELS:
-        for alpha in ALPHAS:
-            for frozen in ENCODER_FROZEN:
+    for frozen in ENCODER_FROZEN:
+        for modelName in MODELS:
+            for alpha in ALPHAS:
                 trainRun(modelName, alpha, frozen, config, trainSet, testSet, DEVICE)
 
 
