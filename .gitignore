@@ -4,3 +4,4 @@ venv310
 __pycache__
 *.pyc
 saliency
+*.pt
